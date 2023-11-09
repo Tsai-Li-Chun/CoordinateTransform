@@ -35,8 +35,8 @@ private:
     limit vertical_limit_ = {};
 
     /*
-     *   true : target height is under limit
-     *  false : target height is over limit
+     *   true : target height is over limit
+     *  false : target height is under limit
      */
     bool CalculateVerticalCondition(const double position_z, double& vertical_angle) const;
 

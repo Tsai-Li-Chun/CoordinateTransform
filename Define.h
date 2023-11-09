@@ -27,7 +27,7 @@ public:
     void SetData(const Matrix3d rotation) {
         rotation_ = rotation;
 
-        euler_ = rotation.eulerAngles(2, 1, 0);
+        euler_ = rotation.eulerAngles(2, 1, 0); // 2 : Z  ,  1 : Y  ,  0 : X
 
         quat_ = Quaterniond(rotation);
     }
