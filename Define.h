@@ -1,10 +1,9 @@
 ﻿#pragma once
 
 #if defined(_WIN32)
-#include "Eigen/Dense"
-//#include "/Visual Studio/CoordinateTransform/Eigen/Dense"
+    #include "Eigen/Dense"
 #elif defined (__linux__)
-#include "eigen3/Eigen/Dense"
+    #include "eigen3/Eigen/Dense"
 #endif
 
 #define PI (3.14159265359)
@@ -70,7 +69,7 @@ public:
     }
 
 private:
-    Vector3d euler_; // euler z-y-x (rad)
+    Vector3d euler_; // euler z-y-x (unit : rad)
     Quaterniond quat_;
     Matrix3d rotation_;
 }; // end of struct
