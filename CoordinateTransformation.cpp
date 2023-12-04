@@ -56,4 +56,6 @@ void CoordinateTransformation::CalculateObjectInGuideRobotRoot(const Pose camera
     // {guide_root}_T_{obj}  =  {guide_root}_T_{camera_root}  *  {camera_root}_T_{object}
     Matrix4d guide_robot_root_to_obj = Matrix4d::Identity();
     guide_robot_root_to_obj = guide_robot_root_to_camera_robot_root_ * camera_robot_root_to_object.GetData();
+
+    guide_robot_root_to_object.SetData(guide_robot_root_to_obj);
 }
