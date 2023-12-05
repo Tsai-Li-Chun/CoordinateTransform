@@ -1,8 +1,8 @@
 #include "pch.h"
 
 #include <iostream>
-#include <cstdlib> /* ¶Ã¼Æ¬ÛÃö¨ç¼Æ */
-#include <ctime>   /* ®É¶¡¬ÛÃö¨ç¼Æ */
+#include <cstdlib> /* äº‚æ•¸ç›¸é—œå‡½æ•¸ */
+#include <ctime>   /* æ™‚é–“ç›¸é—œå‡½æ•¸ */
 
 #include "CoordinateTransformation.h"
 
@@ -12,21 +12,21 @@
 
 #define UNIT_TEST_PRECISION (1e-7)
 
-int random_seed = time(NULL); // ¥H®É¶¡¬°°òÂ¦ªº¶Ã¼ÆºØ¤l
+int random_seed = time(NULL); // ä»¥æ™‚é–“ç‚ºåŸºç¤çš„äº‚æ•¸ç¨®å­
 int count = 0;
 
-// ²£¥Í«ü©w½d³ò [min , max] ªº '¯BÂI¼Æ' ¶Ã¼Æ
+// ç”¢ç”ŸæŒ‡å®šç¯„åœ [min , max] çš„ 'æµ®é»æ•¸' äº‚æ•¸
 double inline produce_random_value_in_range(const double max, const double min) {
 	srand(random_seed + count);
 	count++;
 	// rand() : [0 , RAND_MAX]
-	// rand() / RAND_MAX : ²£¥Í½d³ò [0 , 1] ªº¯BÂI¼Æ¶Ã¼Æ
+	// rand() / RAND_MAX : ç”¢ç”Ÿç¯„åœ [0 , 1] çš„æµ®é»æ•¸äº‚æ•¸
 	return (max - min) * (double) rand() / RAND_MAX + min;
 }
 double inline  produce_random_value() {
 	return produce_random_value_in_range(0.5 * RAND_MAX, -0.5 * RAND_MAX);
 }
-// ²£¥Í«ü©w½d³ò [min , max] ªº '¾ã¼Æ' ¶Ã¼Æ
+// ç”¢ç”ŸæŒ‡å®šç¯„åœ [min , max] çš„ 'æ•´æ•¸' äº‚æ•¸
 int inline produce_int_random_value_in_range(const int max, const int min) {
 	srand(random_seed + count);
 	count++;
@@ -66,8 +66,8 @@ TEST(MathTool, acosd) {
 	EXPECT_NEAR(acos(value), math_tool.acosd(value) * UNIT_TEST_DEG_TO_RAD, UNIT_TEST_PRECISION);
 }
 TEST(MathTool, atan2d) {
-	double numerator   = produce_random_value(); // ¤À¤l
-	double denominator = produce_random_value(); // ¤À¥À
+	double numerator   = produce_random_value(); // åˆ†å­
+	double denominator = produce_random_value(); // åˆ†æ¯
 
 	EXPECT_NEAR(atan2(numerator, denominator), math_tool.atan2d(numerator, denominator) * UNIT_TEST_DEG_TO_RAD, UNIT_TEST_PRECISION);
 }
@@ -267,7 +267,7 @@ TEST(CoordinateTransformation, CalculateObjectInGuideRobotRoot) {
 /*******************************************************************************************************/
 
 int main(int argc, char** argv) {
-	::testing::InitGoogleTest(&argc, argv); // ªì©l¤Æ Google Test ®Ø¬[
+	::testing::InitGoogleTest(&argc, argv); // åˆå§‹åŒ– Google Test æ¡†æ¶
 
-	return RUN_ALL_TESTS(); // ¹B¦æ©Ò¦³´ú¸Õ
+	return RUN_ALL_TESTS(); // é‹è¡Œæ‰€æœ‰æ¸¬è©¦
 }
