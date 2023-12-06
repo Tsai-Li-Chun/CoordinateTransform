@@ -18,7 +18,7 @@ public:
         Reset();
     }
     void Reset() {
-        euler_.setZero();
+        rx_ = 0.0, rx_ = 0.0, rz_ = 0.0;
         quat_.setIdentity();
         rotation_.setIdentity();
     }
@@ -26,16 +26,23 @@ public:
     void SetData(const Matrix3d rotation) {
         rotation_ = rotation;
 
-        euler_ = rotation.eulerAngles(2, 1, 0); // 2 : Z  ,  1 : Y  ,  0 : X
+        double rx, ry, rz;
+        if (rotation_to_euler_zyx(rotation_, rx, ry, rz) == true) {
+            rx_ = rx;
+            ry_ = ry;
+            rz_ = rz;
+        }
 
         quat_ = Quaterniond(rotation);
     }
     void SetData(const double rx, const double ry, const double rz) { // input (unit : deg)
-        euler_ << rx * DEG_TO_RAD, ry * DEG_TO_RAD, rz * DEG_TO_RAD;
+         rx_ = rx * DEG_TO_RAD; 
+         ry_ = ry * DEG_TO_RAD; 
+         rz_ = rz * DEG_TO_RAD;
 
-        rotation_ = AngleAxisd(euler_(2), Vector3d::UnitZ()) *
-                    AngleAxisd(euler_(1), Vector3d::UnitY()) *
-                    AngleAxisd(euler_(0), Vector3d::UnitX());
+        rotation_ = AngleAxisd(rz_, Vector3d::UnitZ()) *
+                    AngleAxisd(ry_, Vector3d::UnitY()) *
+                    AngleAxisd(rx_, Vector3d::UnitX());
 
         quat_ = Quaterniond(rotation_);
     }
@@ -47,7 +54,12 @@ public:
 
         rotation_ = quat_.toRotationMatrix();
 
-        euler_ = rotation_.eulerAngles(2, 1, 0);
+        double rx, ry, rz;
+        if (rotation_to_euler_zyx(rotation_, rx, ry, rz) == true) {
+            rx_ = rx;
+            ry_ = ry;
+            rz_ = rz;
+        }
     }
 
     Matrix3d GetData() const {
@@ -57,9 +69,9 @@ public:
         rotation = rotation_;
     }
     void GetData(double& rx, double& ry, double& rz) const { // output (unit : deg)
-        rx = euler_(0) * RAD_TO_DEG;
-        ry = euler_(1) * RAD_TO_DEG;
-        rz = euler_(2) * RAD_TO_DEG;
+        rx = rx_ * RAD_TO_DEG;
+        ry = ry_ * RAD_TO_DEG;
+        rz = rz_ * RAD_TO_DEG;
     }
     void GetData(double& qw, double& qx, double& qy, double& qz) const {
         qw = quat_.w();
@@ -69,10 +81,71 @@ public:
     }
 
 private:
-    Vector3d euler_; // euler z-y-x (unit : rad)
+    double rx_, ry_, rz_; // euler : z-y-x (unit : rad)
     Quaterniond quat_;
     Matrix3d rotation_;
+
+    bool rotation_to_euler_zyx(const Matrix3d rotation, double& rx, double& ry, double& rz) {
+        double RAD2mDEG = RAD_TO_DEG * 1000.0;
+        double mDEG2RAD = 1.0 / RAD2mDEG;
+        double Rx, Ry, Rz; // unit : mDeg
+        // SCARA 5軸沒有 B 的自由度旋轉，除非使用者設定座標系有y方向旋轉，不然一律進入 else 的判斷
+        if ((fabs(rotation(0, 0)) - 1.7e-5) < 0 && (fabs(rotation(1, 0)) - 1.7e-5) < 0) // code from C67
+        {
+            // 選 A 為0的解比較適合
+            if (rotation(2, 0) >= 0)
+            {
+                Ry = -90000; // -pi/2
+                Rx = 0;
+                if (rotation(1, 2) == 0 && rotation(0, 2) == 0)  return false;
+                Rz = (atan2(-rotation(1, 2), -rotation(0, 2)) * RAD2mDEG);
+            }
+            else if (rotation(2, 0) < 0)
+            {
+                Ry = 90000;  //  pi/2
+                Rx = 0;
+                if (rotation(1, 2) == 0 && rotation(0, 2) == 0)  return false;
+                Rz = (atan2(rotation(1, 2), rotation(0, 2)) * RAD2mDEG);
+            }
+        }
+        else
+        {
+            if (-rotation(2, 0) == 0 && (1 - rotation(2, 0) * rotation(2, 0)) == 0)  return false;
+            if ((1 - rotation(2, 0) * rotation(2, 0)) < 0)
+            {
+                int a;//sqrt zero
+                a++;
+            }
+            Ry = (atan2(-rotation(2, 0), sqrt(1 - rotation(2, 0) * rotation(2, 0))) * RAD2mDEG); //pitch angle
+            if (cos(Ry * mDEG2RAD) > 0.0f) {
+                if (rotation(2, 1) == 0 && rotation(2, 2) == 0)  return false;
+                Rx = (atan2(rotation(2, 1), rotation(2, 2)) * RAD2mDEG);//roll  angle
+                if (rotation(1, 0) == 0 && rotation(0, 0) == 0)  return false;
+                Rz = (atan2(rotation(1, 0), rotation(0, 0)) * RAD2mDEG);//yaw   angle
+            }
+            else if (cos(Ry * mDEG2RAD) < 0.0f) {
+                if (-rotation(2, 1) == 0 && -rotation(2, 2) == 0)  return false;
+                Rx = (atan2(-rotation(2, 1), -rotation(2, 2)) * RAD2mDEG);//roll  angle
+                if (-rotation(1, 0) == 0 && -rotation(0, 0) == 0)  return false;
+                Rz = (atan2(-rotation(1, 0), -rotation(0, 0)) * RAD2mDEG);//yaw   angle
+            }
+        }
+        // 三維空間 A,C自由度在正負180度，視為同一方位...
+        if (fabs(Rx + 180000) < 0.001) {
+            Rx = 180000;
+        }
+        if (fabs(Rz + 180000) < 0.001) {
+            Rz = 180000;
+        }
+
+        rx = Rx * mDEG2RAD; 
+        ry = Ry * mDEG2RAD;
+        rz = Rz * mDEG2RAD;
+        return true;
+    }
 }; // end of struct
+
+
 
 struct Pose {
 public:
