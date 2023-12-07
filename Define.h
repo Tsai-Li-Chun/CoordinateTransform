@@ -36,9 +36,9 @@ public:
         quat_ = Quaterniond(rotation);
     }
     void SetData(const double rx, const double ry, const double rz) { // input (unit : deg)
-         rx_ = rx * DEG_TO_RAD; 
-         ry_ = ry * DEG_TO_RAD; 
-         rz_ = rz * DEG_TO_RAD;
+        rx_ = rx * DEG_TO_RAD; 
+        ry_ = ry * DEG_TO_RAD; 
+        rz_ = rz * DEG_TO_RAD;
 
         rotation_ = AngleAxisd(rz_, Vector3d::UnitZ()) *
                     AngleAxisd(ry_, Vector3d::UnitY()) *
