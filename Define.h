@@ -9,6 +9,14 @@
 #define PI (3.14159265359)
 #define RAD_TO_DEG (1.0 / PI * 180.0)
 #define DEG_TO_RAD (1.0 / RAD_TO_DEG)
+#define ERROR_PRECISION (1e-7)
+
+/*
+ *   true : exceeding the limit
+ *  false : within the limit
+ */
+#define CHECK_LIMIT(value, upper_limit, lower_limit) \
+    (((value - lower_limit) < -ERROR_PRECISION) || ((value - upper_limit) > ERROR_PRECISION))
 
 using namespace Eigen;
 

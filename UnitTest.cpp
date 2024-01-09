@@ -380,6 +380,263 @@ TEST(IntegrationTest_CoordinateTransformation, CalibrateTwoRobotRoot) {
 /*******************************************************************************************************/
 
 
+// M5Manipulator Unit Test
+/*******************************************************************************************************/
+M5Manipulator m5_manipulator;
+
+TEST(UnitTest_M5Manipulator, AnalyzeReachability_OverHeightLimit_Test) {
+	ReachabilityResult reachability_result_actual = ReachabilityResult::eNormal;
+	Limit vertical_height_limit = m5_manipulator.GetVerticalHeightLimit();
+	Limit horizontal_limit = m5_manipulator.GetHorizontalLimit();
+	Pose m5_robot_root_to_flange;
+
+	double x = 0.0, y = 0.0, z = 0.0, Rx = 0.0, Ry = -90.0, Rz = 180.0;
+	x = produce_random_value_in_range(horizontal_limit.positve, horizontal_limit.negative); // unit : mm
+	y = produce_random_value_in_range(horizontal_limit.positve, horizontal_limit.negative); // unit : mm
+
+	// exceed the vertical height limit test
+	LinkParameters link_parameters[6];
+	m5_manipulator.GetLinkParameters(link_parameters);
+	double h = 0.0;
+	double random_delta_height = produce_random_value(); // unit : mm
+	h = random_delta_height >= 0.0 ? vertical_height_limit.positve : vertical_height_limit.negative;
+	h += random_delta_height;
+	z = h - link_parameters[5].D;
+	Rx = produce_random_value_in_range(180.0, -180.0); // unit : deg
+
+	m5_robot_root_to_flange.SetData(x, y, z, Rx, Ry, Rz);
+
+	double max_distance_x_actual = 0.0;
+	reachability_result_actual = m5_manipulator.AnalyzeReachability(m5_robot_root_to_flange, max_distance_x_actual);
+
+	EXPECT_EQ(ReachabilityResult::eOverHeightLimit, reachability_result_actual);
+}
+TEST(UnitTest_M5Manipulator, AnalyzeReachability) {
+	ReachabilityResult reachability_result_actual = ReachabilityResult::eNormal;
+	Limit vertical_height_limit = m5_manipulator.GetVerticalHeightLimit(); // unit : mm
+	Limit vertical_angle_limit = m5_manipulator.GetVerticalAngleLimit(); // unit : deg
+	Limit horizontal_limit = m5_manipulator.GetHorizontalLimit();
+	Pose m5_robot_root_to_flange;
+	LinkParameters link_parameters[6];
+	m5_manipulator.GetLinkParameters(link_parameters);
+
+	double h = 0.0, x = 0.0, y = 0.0, z = 0.0, Rx = 0.0, Ry = -90.0, Rz = 180.0;
+	double max_distance_x_actual = 0.0;
+	x = produce_random_value_in_range(horizontal_limit.positve, horizontal_limit.negative); // unit : mm
+	y = produce_random_value_in_range(horizontal_limit.positve, horizontal_limit.negative); // unit : mm
+	h = produce_random_value_in_range(vertical_height_limit.positve, vertical_height_limit.negative); // unit : mm
+	z = h - link_parameters[5].D; // z = h - D6
+	Rx = produce_random_value_in_range(180.0, -180.0); // unit : deg
+
+	m5_robot_root_to_flange.SetData(x, y, z, Rx, Ry, Rz);
+	reachability_result_actual = m5_manipulator.AnalyzeReachability(m5_robot_root_to_flange, max_distance_x_actual);
+
+	// test the condition for exceeding vertical height limit
+	//-------------------------------------------------------------------------------------------------------------------------------//
+	if (((h - vertical_height_limit.negative) < -UNIT_TEST_PRECISION) || ((h - vertical_height_limit.positve) > UNIT_TEST_PRECISION)) {
+		EXPECT_EQ(ReachabilityResult::eOverHeightLimit, reachability_result_actual);
+		return;
+	}
+	//-------------------------------------------------------------------------------------------------------------------------------//
+
+	double tmp = h - link_parameters[0].D; // h - D1
+	double vertical_angle_rad = asin(tmp / link_parameters[3].L);
+
+	// test the condition for exceeding vertical angle limit
+	//--------------------------------------------------------------------------------//
+	double vertical_angle_deg = vertical_angle_rad * UNIT_TEST_RAD_TO_DEG;
+	if (((vertical_angle_deg - vertical_angle_limit.negative) < -UNIT_TEST_PRECISION) ||
+	    ((vertical_angle_deg - vertical_angle_limit.positve) > UNIT_TEST_PRECISION)) {
+		EXPECT_EQ(ReachabilityResult::eOverHeightLimit, reachability_result_actual);
+		return;
+	}
+	//--------------------------------------------------------------------------------//
+
+	Vector3d position = m5_robot_root_to_flange.GetPosition();
+	Matrix3d rotation = m5_robot_root_to_flange.GetRotation();
+
+	Vector3d uz = rotation.block<3,1>(0,2);
+	Vector3d uy = Vector3d::Zero();
+	uy(1) = y / fabs(y);
+
+	double alpha_rad = acos(uz.dot(uy));
+	double cos_alpha = cos(alpha_rad);
+
+	double B = link_parameters[2].L + link_parameters[3].L * cos(vertical_angle_rad) + link_parameters[4].L + link_parameters[5].L;
+	double E = link_parameters[0].L + link_parameters[1].L;
+	double target_distance = sqrt(x * x + y * y);
+
+	ReachabilityResult reachability_result_expected;
+
+	if (target_distance > B + E) {
+		EXPECT_EQ(ReachabilityResult::eOverHorizontalLimit, reachability_result_actual);
+		return;
+	} else {
+		double C = fabs(y);
+		double A = sqrt(B * B + C * C - 2 * B * C * cos_alpha);
+
+		double cos_beta = (C - B * cos_alpha) / A;
+		double sin_beta = sqrt(1 - cos_beta * cos_beta);
+
+		double discriminant = (A * sin_beta) * (A * sin_beta) - (A * A - E * E);
+
+		if (discriminant < 0) {
+			EXPECT_EQ(ReachabilityResult::eOverHorizontalLimit, reachability_result_actual);
+		} else {
+			double tmp = sqrt(discriminant);
+			double D1 = A * sin_beta + tmp;
+			double D2 = A * sin_beta - tmp;
+			double D = D1 >= D2 ? D1 : D2;
+			double max_distance_x_expected = D;
+
+			reachability_result_expected = (fabs(x) - D) > UNIT_TEST_PRECISION ? ReachabilityResult::eOverHorizontalLimit : ReachabilityResult::eNormal;
+
+			EXPECT_NEAR(max_distance_x_expected, max_distance_x_actual, UNIT_TEST_PRECISION);
+		}
+	}
+}
+void AnalyzeReachabilityStressTest(double& out_x, double& out_y, double& out_z, double& out_Rx, double& out_Ry, double& out_Rz) {
+	ReachabilityResult reachability_result_actual = ReachabilityResult::eNormal;
+	Limit vertical_height_limit = m5_manipulator.GetVerticalHeightLimit(); // unit : mm
+	Limit vertical_angle_limit = m5_manipulator.GetVerticalAngleLimit(); // unit : deg
+	Limit horizontal_limit = m5_manipulator.GetHorizontalLimit();
+	Pose m5_robot_root_to_flange;
+	LinkParameters link_parameters[6];
+	m5_manipulator.GetLinkParameters(link_parameters);
+
+	double h = 0.0, x = 0.0, y = 0.0, z = 0.0, Rx = 0.0, Ry = -90.0, Rz = 180.0;
+	double max_distance_x_actual = 0.0;
+	x = produce_random_value_in_range(horizontal_limit.positve, horizontal_limit.negative); // unit : mm
+	y = produce_random_value_in_range(horizontal_limit.positve, horizontal_limit.negative); // unit : mm
+	h = produce_random_value_in_range(vertical_height_limit.positve, vertical_height_limit.negative); // unit : mm
+	z = h - link_parameters[5].D; // z = h - D6
+	Rx = produce_random_value_in_range(180.0, -180.0); // unit : deg
+
+	m5_robot_root_to_flange.SetData(x, y, z, Rx, Ry, Rz);
+	reachability_result_actual = m5_manipulator.AnalyzeReachability(m5_robot_root_to_flange, max_distance_x_actual);
+
+	// test vertical limit condition
+	//-----------------------------------------------------------------------------------------------------------------//
+	if (((h - vertical_height_limit.negative) < -UNIT_TEST_PRECISION) || ((h - vertical_height_limit.positve) > UNIT_TEST_PRECISION)) {
+		EXPECT_EQ(ReachabilityResult::eOverHeightLimit, reachability_result_actual);
+
+		out_x = x;  out_y = y;  out_z = z;
+		out_Rx = Rx;  out_Ry = Ry;  out_Rz = Rz;
+		return;
+	}
+	//-----------------------------------------------------------------------------------------------------------------//
+
+	double tmp = h - link_parameters[0].D; // h - D1
+	double vertical_angle_rad = asin(tmp / link_parameters[3].L);
+
+	// test the condition for exceeding vertical angle limit
+	//--------------------------------------------------------------------------------//
+	double vertical_angle_deg = vertical_angle_rad * UNIT_TEST_RAD_TO_DEG;
+	if (((vertical_angle_deg - vertical_angle_limit.negative) < -UNIT_TEST_PRECISION) ||
+	    ((vertical_angle_deg - vertical_angle_limit.positve) > UNIT_TEST_PRECISION)) {
+		EXPECT_EQ(ReachabilityResult::eOverHeightLimit, reachability_result_actual);
+		return;
+	}
+	//--------------------------------------------------------------------------------//
+
+	Vector3d position = m5_robot_root_to_flange.GetPosition();
+	Matrix3d rotation = m5_robot_root_to_flange.GetRotation();
+
+	Vector3d uz = rotation.block<3,1>(0,2);
+	Vector3d uy = Vector3d::Zero();
+	uy(1) = y / fabs(y);
+
+	double alpha_rad = acos(uz.dot(uy));
+	double cos_alpha = cos(alpha_rad);
+
+	double B = link_parameters[2].L + link_parameters[3].L * cos(vertical_angle_rad) + link_parameters[4].L + link_parameters[5].L;
+	double E = link_parameters[0].L + link_parameters[1].L;
+	double target_distance = sqrt(x * x + y * y);
+
+	ReachabilityResult reachability_result_expected;
+
+	if (target_distance > B + E) {
+		EXPECT_EQ(ReachabilityResult::eOverHorizontalLimit, reachability_result_actual);
+
+		out_x = x;  out_y = y;  out_z = z;
+		out_Rx = Rx;  out_Ry = Ry;  out_Rz = Rz;
+		return;
+	} else {
+		double C = fabs(y);
+		double A = sqrt(B * B + C * C - 2 * B * C * cos_alpha);
+
+		double cos_beta = (C - B * cos_alpha) / A;
+		double sin_beta = sqrt(1 - cos_beta * cos_beta);
+
+		double discriminant = (A * sin_beta) * (A * sin_beta) - (A * A - E * E);
+
+		if (discriminant < 0) {
+			EXPECT_EQ(ReachabilityResult::eOverHorizontalLimit, reachability_result_actual);
+
+			out_x = x;  out_y = y;  out_z = z;
+			out_Rx = Rx;  out_Ry = Ry;  out_Rz = Rz;
+			return;
+		} else {
+			double tmp = sqrt(discriminant);
+			double D1 = A * sin_beta + tmp;
+			double D2 = A * sin_beta - tmp;
+			double D = D1 >= D2 ? D1 : D2;
+			double max_distance_x_expected = D;
+
+			reachability_result_expected = (fabs(x) - D) > UNIT_TEST_PRECISION ? ReachabilityResult::eOverHorizontalLimit : ReachabilityResult::eNormal;
+
+			EXPECT_NEAR(max_distance_x_expected, max_distance_x_actual, UNIT_TEST_PRECISION);
+
+			out_x = x;  out_y = y;  out_z = z;
+			out_Rx = Rx;  out_Ry = Ry;  out_Rz = Rz;
+			return;
+		}
+	}
+}
+TEST(UnitTest_M5Manipulator, AnalyzeReachability_StressTesting) {
+	int count = 0;
+	int count_limit = 1000000; // max testing times
+	double x, y, z, Rx, Ry, Rz;
+
+	while (true) {
+		x = 0.0, y = 0.0, z = 0.0, Rx = 0.0, Ry = 0.0, Rz = 0.0; // reset
+
+		AnalyzeReachabilityStressTest(x, y, z, Rx, Ry, Rz);
+
+		if (::testing::Test::HasFailure() || count > count_limit) {
+			if (count > count_limit) {
+				printf("=== Tested %d times. ===\n", count);
+			} else {
+				printf("Tested fail @ %d_th time. The pose is : x = %lf , y = %lf , z = %lf , Rx = %lf , Ry = %lf , Rz = %lf\n", count, x, y, z, Rx, Ry, Rz);
+			}
+
+			break;
+		}
+
+		count++;
+	}
+}
+/*******************************************************************************************************/
+
+
+// M5Manipulator Integration Test
+/*******************************************************************************************************/
+TEST(IntegrationTest_M5Manipulator, AnalyzeReachability) {
+	ReachabilityResult reachability_result_actual = ReachabilityResult::eNormal;
+	Pose m5_robot_root_to_flange;
+
+	double x = 100 /*1075.44463612023*/, y = 1063.24515890219, z = 491.868215745095, Rx = 30.0, Ry = -90.0, Rz = 180.0; // vertical angle : 35 deg
+	//double x = 100 /*1075.44463612023*/, y = 1063.24515890219, z = -150.528215745095, Rx = 30.0, Ry = -90.0, Rz = 180.0; // vertical angle : -35 deg
+
+	double max_distance_x_actual = 0.0;
+	m5_robot_root_to_flange.SetData(x, y, z, Rx, Ry, Rz);
+	reachability_result_actual = m5_manipulator.AnalyzeReachability(m5_robot_root_to_flange, max_distance_x_actual);
+
+	double max_distance_x_expected = 1075.44463612023; // theoretical maximum distance
+
+	EXPECT_NEAR(max_distance_x_expected, max_distance_x_actual, UNIT_TEST_PRECISION);
+}
+/*******************************************************************************************************/
 
 int main(int argc, char** argv) {
 	::testing::InitGoogleTest(&argc, argv); // ªì©l¤Æ Google Test ®Ø¬[
